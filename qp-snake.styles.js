@@ -15,29 +15,14 @@ function getStyles(options) {
           font-family: inherit;
         }
 
-        .qp-memory-wrapper {
+        .qp-snake-wrapper {
           display: flex;
           justify-content: center;
           width: 100%;
           padding: 2rem 0;
         }
-
-        .qp-memory-display {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          border-bottom: 1px solid #ddd;
-          margin: 0 2rem;
-          padding: 0.25rem 1rem;
-          font-family: monospace;
-        }
-        .qp-memory-display-output {
-          text-align: center;
-        }
-        .qp-memory-display-counter {
-          text-align: right;
-        }
         
-        .qp-memory-board {
+        .qp-snake-board {
           --boardWidth: 100%;
           display: grid;
           grid-template-columns: repeat(${dimension}, 1fr);
@@ -46,32 +31,12 @@ function getStyles(options) {
           width: var(--boardWidth);
         }
 
-        .qp-memory-card {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 0.5rem;
-          cursor: pointer;
-          aspect-ratio: 1 / 1;
-          background-color: #ddd;
-          background-size: cover;
-          background-repeat: no-repeat;
-          background-position: 50%;
-          background-image: url(${bgUrlMemoryCard});
-          border: 5px double #6d757d;
-        }
-
-        .qp-memory-card-matched {
-          filter: sepia(100%) grayscale(50%) blur(1px) !important;
-        }
-        .qp-memory-card-hint {
-          border: 5px double #e29706;
-        }
-
+        /* Prevent Events */
         .qp-prevent-events {
           pointer-events: none;
         }
 
+        /* Button Bar and Buttons */
         .qp-memory-button-bar {
           display: flex;
           justify-content: center;
