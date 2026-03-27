@@ -1,12 +1,8 @@
 // public/js/components-web/qp-memory/qp-memory.styles.js
 
-function getStyles(options) {
-  options = Object.assign({}, { size: 20 }, options);
-  
-  const { size } = options;
+function getStyles() {
   // const bgUrlMemoryCard = new URL('./images/qp-memory-background.svg', import.meta.url).href;
 
-  
   return `
       <style>
         :host {
@@ -23,12 +19,14 @@ function getStyles(options) {
         }
         
         .qp-snake-board {
+          --width: 70vmin;
+          --size: 20;
           display: grid;
-          grid-template-columns: repeat(${size}, 1fr);
-          grid-template-rows: repeat(${size}, 1fr);
+          grid-template-columns: repeat(var(--size), 1fr);
+          grid-template-rows: repeat(var(--size), 1fr);
           gap: 2px;
-          width: 70vmin;
-          height: 70vmin;
+          width: var(--width);
+          height: var(--width);
           border: 1px solid #aaa;
         }
           
