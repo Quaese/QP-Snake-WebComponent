@@ -1,10 +1,10 @@
 // public/js/components-web/qp-memory/qp-memory.styles.js
 
 function getStyles(options) {
-  options = Object.assign({}, { dimension: 3 }, options);
+  options = Object.assign({}, { size: 20 }, options);
   
-  const { dimension } = options;
-  const bgUrlMemoryCard = new URL('./images/qp-memory-background.svg', import.meta.url).href;
+  const { size } = options;
+  // const bgUrlMemoryCard = new URL('./images/qp-memory-background.svg', import.meta.url).href;
 
   
   return `
@@ -23,12 +23,25 @@ function getStyles(options) {
         }
         
         .qp-snake-board {
-          --boardWidth: 100%;
           display: grid;
-          grid-template-columns: repeat(${dimension}, 1fr);
-          grid-template-rows: repeat(${dimension}, 1fr);
-          gap: 1rem;
-          width: var(--boardWidth);
+          grid-template-columns: repeat(${size}, 1fr);
+          grid-template-rows: repeat(${size}, 1fr);
+          gap: 2px;
+          width: 70vmin;
+          height: 70vmin;
+          border: 1px solid #aaa;
+        }
+          
+        .qp-snake-cell {
+          background-color: #f1f1f1;
+        }
+
+        .qp-snake-body {
+          background-color: #333;
+        }
+          
+        .qp-snake-head {
+          background-color: #f00;
         }
 
         /* Prevent Events */

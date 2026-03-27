@@ -1,5 +1,6 @@
 const Dictionary = (args) => ({
-  // funSnakeHeadline: { de: 'Snake', en: 'Snake' },
+  funSnakeStart: { de: "Start", en: "Start" },
+  funSnakeStop: { de: "Stop", en: "Stop" },
 });
 
 const Languages = ["de", "en"];

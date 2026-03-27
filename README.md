@@ -1,5 +1,6 @@
 # `<qp-memory>` — Cover Memory Game
 
+Inspiriert von einer Idee und Umsetzung durch [ScriptRaccoon](https://github.com/ScriptRaccoon/snake-game) basierend auf einem[Live Coding Video](https://www.youtube.com/watch?v=4oNyD3A5Xl4), dass ich während einer Trainingseinheit auf meiner "Küchenrolle" (= Indoor-Fahrrad) ansah.
 A memory/matching card game as a Web Component. Image sources are configurable:
 either fetched from a server API (via the `url` attribute) or loaded from the
 bundled local image set as fallback. Players flip pairs of cards to find matching images.
