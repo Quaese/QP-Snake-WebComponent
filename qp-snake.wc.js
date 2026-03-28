@@ -68,7 +68,6 @@ class QPSnake extends HTMLElement {
     this._hLoopTimer = null;
     this._snake = [];
     this._direction = "down";
-    this._isFirst = true;
     this._isRunning = false;
 
     // Methods bound to this
@@ -112,7 +111,8 @@ class QPSnake extends HTMLElement {
         this._size = Number(newValue) || this._size;
         break;
       case "width":
-        this._width = newValue.endsWith('vmin') ? newValue : this._width;
+        // this._width = newValue.endsWith('vmin') ? newValue : this._width;
+        this._width = /^\d+vmin$/.test(newValue) ? newValue : this._width;
         break;
     }
 
@@ -294,10 +294,10 @@ class QPSnake extends HTMLElement {
   _startGame() {
     this._stopGame();
     this._removeSnake();
-    this._isFirst = true;
     this._initSnake();
+    this._renderSnake();
     this._hLoopTimer = setInterval(() => this._renderLoop.call(this), QPSnake.LOOP_INTERVAL);
-    
+
     this._isRunning = true;
     this._dispatchEvent("qp-snake.game-started");
   }
@@ -377,9 +377,8 @@ class QPSnake extends HTMLElement {
 
   _renderLoop() {
     this._removeSnake();
-    !this._isFirst && this._updateSnake();
+    this._updateSnake();
     this._renderSnake();
-    this._isFirst = false;
   }
 
   _removeSnake() {
@@ -408,6 +407,10 @@ class QPSnake extends HTMLElement {
 
     return x >= 0 && x < this._size && y >= 0 && y < this._size;
   }
+  
+  _hasCollision(head) {
+    return this._snake.some((segment) => segment[0] === head[0] && segment[1] === head[1])
+  }
 
   _updateSnake() {
     // coordinates of head
@@ -432,9 +435,8 @@ class QPSnake extends HTMLElement {
         break;
     }
     
-    this._snake.some((segment) => { console.log(segment, head, segment === head); return segment[0] === head[0]});
     // check if head hits a segment of the snake
-    if (this._snake.some((segment) => segment[0] === head[0] && segment[1] === head[1])) {
+    if (this._hasCollision(head)) {
       this._lostGame();
     }
     
