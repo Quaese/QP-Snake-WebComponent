@@ -39,7 +39,11 @@ function getStyles() {
         }
           
         .qp-snake-head {
-          background-color: #f00;
+          background-color: rgba(176, 42, 55, 1);
+        }
+        .qp-snake-food {
+          background-color: rgba(20, 108, 67, 1);
+          border-radius: 50%;
         }
 
         /* Prevent Events */

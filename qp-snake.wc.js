@@ -28,7 +28,7 @@ import Dictionary, { Languages } from "./qp-snake.dictionary.js";
 import getStyles from "./qp-snake.styles.js";
 
 class QPSnake extends HTMLElement {
-  static CELL_SIZE = 20;
+  static SIZE = 20;
   static LOOP_INTERVAL = 500;
   static DIRECTIONS = ["up", "right", "down", "left"];
   static KEYS = {
@@ -46,7 +46,7 @@ class QPSnake extends HTMLElement {
   }
 
   static get observedAttributes() {
-    return ["size", "width"];
+    return ["size", "width", "lang"];
   }
 
   constructor() {
@@ -57,7 +57,7 @@ class QPSnake extends HTMLElement {
 
     // attributes
     this._lang = "de";
-    this._size = QPSnake.CELL_SIZE;
+    this._size = QPSnake.SIZE;
     this._width = '70vmin';
 
     // nodes
@@ -67,6 +67,7 @@ class QPSnake extends HTMLElement {
     // timers and properties
     this._hLoopTimer = null;
     this._snake = [];
+    this._food = null;
     this._direction = "down";
     this._isRunning = false;
 
@@ -109,14 +110,19 @@ class QPSnake extends HTMLElement {
     switch (name) {
       case "size":
         this._size = Number(newValue) || this._size;
+        this._resetGame();
         break;
       case "width":
         // this._width = newValue.endsWith('vmin') ? newValue : this._width;
         this._width = /^\d+vmin$/.test(newValue) ? newValue : this._width;
         break;
+      case "lang":
+        this._lang = newValue;
+        this._initializeDictionary();
+        break;
     }
 
-    if (this.isConnected) {
+    if (this.isConnected && this._board) {
       this._render();
     }
   }
@@ -179,15 +185,15 @@ class QPSnake extends HTMLElement {
     this._btnStart = this.shadowRoot.querySelector(".qp-snake-btn-start");
   }
 
-  _randomCoordinates() {
-    return {
-      x: Math.floor(Math.random() * this._size),
-      y: Math.floor(Math.random() * this._size),
-    };
+  _randomPosition() {
+    return [
+      Math.floor(Math.random() * this._size),
+      Math.floor(Math.random() * this._size),
+    ];
   }
 
   _initSnake() {
-    const { x, y } = this._randomCoordinates();
+    const [x, y] = this._randomPosition();
 
     // initialize snake (Array = Snake von hinten nach vorne, dh. [0] = letztes Element, [1] = Kopf)
     this._snake = [
@@ -291,11 +297,23 @@ class QPSnake extends HTMLElement {
     console.log("lost");
   }
 
-  _startGame() {
+  /**
+   * Resets all game state to initial values.
+   * Stops the loop, removes snake and food from the board,
+   * and clears all game-related properties.
+   * @private
+   */
+  _resetGame() {
     this._stopGame();
     this._removeSnake();
+    this._removeFood();
     this._initSnake();
+  }
+
+  _startGame() {
+    this._resetGame();
     this._renderSnake();
+    this._renderFood();
     this._hLoopTimer = setInterval(() => this._renderLoop.call(this), QPSnake.LOOP_INTERVAL);
 
     this._isRunning = true;
@@ -347,6 +365,10 @@ class QPSnake extends HTMLElement {
 
     return cells;
   }
+  
+  _getCell([x, y]) {
+    return this._board ? this._board.querySelector(`[data-id="${x},${y}"]`) : null;
+  }
 
   /**
    * Renders the full shadow DOM, caches node references, and attaches event listeners.
@@ -395,11 +417,29 @@ class QPSnake extends HTMLElement {
     // });
 
     for (const [x, y] of this._snake) {
-      this._board.querySelector(`[data-id="${x},${y}"]`).classList.add("qp-snake-body");
+      this._getCell([x, y]).classList.add("qp-snake-body");
     }
 
     const [x, y] = this._snake.at(-1);
-    this._board.querySelector(`[data-id="${x},${y}"]`).classList.add("qp-snake-head");
+    this._getCell([x, y]).classList.add("qp-snake-head");
+  }
+  
+  _renderFood() {
+    this._food && this._removeFood();
+    
+    this._food = this._randomPosition();
+    
+    while(this._hasCollision(this._food)) {
+      this._food = this._randomPosition();
+    }
+    
+    this._getCell(this._food).classList.add("qp-snake-food");
+  }
+  
+  _removeFood() {
+    this._food && this._getCell(this._food).classList.remove("qp-snake-food");
+    
+    this._food = null;
   }
 
   _isHeadValid(head) {
@@ -408,8 +448,12 @@ class QPSnake extends HTMLElement {
     return x >= 0 && x < this._size && y >= 0 && y < this._size;
   }
   
-  _hasCollision(head) {
-    return this._snake.some((segment) => segment[0] === head[0] && segment[1] === head[1])
+  _hasCollision(position) {
+    return this._snake.some((segment) => segment[0] === position[0] && segment[1] === position[1])
+  }
+  
+  _hasEqualPosition(position1, position2) {
+    return position1[0] === position2[0] && position1[1] === position2[1]
   }
 
   _updateSnake() {
@@ -440,9 +484,19 @@ class QPSnake extends HTMLElement {
       this._lostGame();
     }
     
+    
     // is snake inside game board
     if (this._isHeadValid(head)) {
-      this._snake = [...tail, head];
+      if (this._hasEqualPosition(this._food, head)) {
+        this._removeFood();
+        this._renderFood();
+        
+        // grow snake
+        this._snake = [...this._snake, head];
+      } else {
+        // move snake
+        this._snake = [...tail, head];
+      }
     } else {
       this._lostGame();
     }
