@@ -58,7 +58,7 @@ class QPSnake extends HTMLElement {
     // attributes
     this._lang = "de";
     this._size = QPSnake.SIZE;
-    this._width = '70vmin';
+    this._width = "70vmin";
 
     // nodes
     this._board = null;
@@ -70,6 +70,7 @@ class QPSnake extends HTMLElement {
     this._food = null;
     this._direction = "down";
     this._isRunning = false;
+    this._isPaused = false;
 
     // Methods bound to this
     this._handleStopClick = this._handleStopClick.bind(this);
@@ -186,10 +187,7 @@ class QPSnake extends HTMLElement {
   }
 
   _randomPosition() {
-    return [
-      Math.floor(Math.random() * this._size),
-      Math.floor(Math.random() * this._size),
-    ];
+    return [Math.floor(Math.random() * this._size), Math.floor(Math.random() * this._size)];
   }
 
   _initSnake() {
@@ -260,31 +258,31 @@ class QPSnake extends HTMLElement {
 
   _handleKeyDown(e) {
     QPSnake.KEYS[e.keyCode] && e.preventDefault();
-    
-    switch(QPSnake.KEYS[e.keyCode]) {
+
+    switch (QPSnake.KEYS[e.keyCode]) {
       case "ArrowLeft":
-        if (this._direction !== "right")
-          this._direction = "left";
+        if (this._direction !== "right") this._direction = "left";
         break;
       case "ArrowRight":
-        if (this._direction !== "left")
-          this._direction = "right";
+        if (this._direction !== "left") this._direction = "right";
         break;
       case "ArrowUp":
-        if (this._direction !== "down")
-          this._direction = "up";
+        if (this._direction !== "down") this._direction = "up";
         break;
       case "ArrowDown":
-        if (this._direction !== "up")
-          this._direction = "down";
+        if (this._direction !== "up") this._direction = "down";
         break;
       case "Space":
-        if (this._isRunning && this._hLoopTimer) {
-          clearInterval(this._hLoopTimer);
-          this._hLoopTimer = null;
+        if (!this._isRunning) {
+          this._startGame();
+        } else if (this._isPaused) {
+          this._resumeGame();
         } else {
-          this._hLoopTimer = setInterval(() => this._renderLoop.call(this), QPSnake.LOOP_INTERVAL);
+          this._pauseGame();
         }
+        break;
+      case "Escape":
+        this._stopGame();
         break;
     }
   }
@@ -292,9 +290,33 @@ class QPSnake extends HTMLElement {
 
   /* START - Game Controller */
   _lostGame() {
-    this._stopGame();
+    this._clearLoop();
     this._dispatchEvent("qp-snake.game-lost");
-    console.log("lost");
+  }
+
+  _wonGame() {
+    this._clearLoop();
+    this._dispatchEvent("qp-snake.game-won");
+  }
+
+  _clearLoop() {
+    this._hLoopTimer && clearInterval(this._hLoopTimer);
+    this._hLoopTimer = null;
+    this._isRunning = false;
+    this._isPaused = false;
+  }
+
+  _pauseGame() {
+    this._hLoopTimer && clearInterval(this._hLoopTimer);
+    this._hLoopTimer = null;
+    this._isPaused = true;
+    this._dispatchEvent("qp-snake.game-paused");
+  }
+
+  _resumeGame() {
+    this._hLoopTimer = setInterval(() => this._renderLoop(), QPSnake.LOOP_INTERVAL);
+    this._isPaused = false;
+    this._dispatchEvent("qp-snake.game-resumed");
   }
 
   /**
@@ -314,16 +336,15 @@ class QPSnake extends HTMLElement {
     this._resetGame();
     this._renderSnake();
     this._renderFood();
-    this._hLoopTimer = setInterval(() => this._renderLoop.call(this), QPSnake.LOOP_INTERVAL);
+    this._hLoopTimer = setInterval(() => this._renderLoop(), QPSnake.LOOP_INTERVAL);
 
     this._isRunning = true;
+    this._isPaused = false;
     this._dispatchEvent("qp-snake.game-started");
   }
 
   _stopGame() {
-    this._hLoopTimer && clearInterval(this._hLoopTimer);
-
-    this._isRunning = false;
+    this._clearLoop();
     this._dispatchEvent("qp-snake.game-stopped");
   }
 
@@ -365,7 +386,7 @@ class QPSnake extends HTMLElement {
 
     return cells;
   }
-  
+
   _getCell([x, y]) {
     return this._board ? this._board.querySelector(`[data-id="${x},${y}"]`) : null;
   }
@@ -393,7 +414,6 @@ class QPSnake extends HTMLElement {
     if (this.isConnected) {
       this._setNodes();
       this._attachEvents();
-      this._startGame();
     }
   }
 
@@ -404,10 +424,8 @@ class QPSnake extends HTMLElement {
   }
 
   _removeSnake() {
-    for (const [x, y] of this._snake) {
-      this._board
-        .querySelector(`[data-id="${x},${y}"]`)
-        ?.classList.remove("qp-snake-body", "qp-snake-head");
+    for (const segment of this._snake) {
+      this._getCell(segment)?.classList.remove("qp-snake-body", "qp-snake-head");
     }
   }
 
@@ -423,22 +441,27 @@ class QPSnake extends HTMLElement {
     const [x, y] = this._snake.at(-1);
     this._getCell([x, y]).classList.add("qp-snake-head");
   }
-  
+
   _renderFood() {
+    if (this._snake.length >= this._size * this._size) {
+      this._wonGame();
+      return;
+    }
+
     this._food && this._removeFood();
-    
+
     this._food = this._randomPosition();
-    
-    while(this._hasCollision(this._food)) {
+
+    while (this._hasCollision(this._food)) {
       this._food = this._randomPosition();
     }
-    
+
     this._getCell(this._food).classList.add("qp-snake-food");
   }
-  
+
   _removeFood() {
     this._food && this._getCell(this._food).classList.remove("qp-snake-food");
-    
+
     this._food = null;
   }
 
@@ -447,13 +470,13 @@ class QPSnake extends HTMLElement {
 
     return x >= 0 && x < this._size && y >= 0 && y < this._size;
   }
-  
+
   _hasCollision(position) {
-    return this._snake.some((segment) => segment[0] === position[0] && segment[1] === position[1])
+    return this._snake.some((segment) => segment[0] === position[0] && segment[1] === position[1]);
   }
-  
+
   _hasEqualPosition(position1, position2) {
-    return position1[0] === position2[0] && position1[1] === position2[1]
+    return position1[0] === position2[0] && position1[1] === position2[1];
   }
 
   _updateSnake() {
@@ -478,19 +501,19 @@ class QPSnake extends HTMLElement {
         head = [x, y + 1];
         break;
     }
-    
+
     // check if head hits a segment of the snake
     if (this._hasCollision(head)) {
       this._lostGame();
+      return;
     }
-    
-    
+
     // is snake inside game board
     if (this._isHeadValid(head)) {
       if (this._hasEqualPosition(this._food, head)) {
         this._removeFood();
         this._renderFood();
-        
+
         // grow snake
         this._snake = [...this._snake, head];
       } else {
@@ -499,6 +522,7 @@ class QPSnake extends HTMLElement {
       }
     } else {
       this._lostGame();
+      return;
     }
   }
   /* END - UI Controller Methods */

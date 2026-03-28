@@ -25,13 +25,16 @@ function getStyles() {
           grid-template-columns: repeat(var(--size), 1fr);
           grid-template-rows: repeat(var(--size), 1fr);
           gap: 2px;
+          padding: 2px;
           width: var(--width);
           height: var(--width);
-          border: 1px solid #aaa;
+          border: 1px solid #ddd;
+          border-radius: 4px;
         }
           
         .qp-snake-cell {
-          background-color: #f1f1f1;
+          background-color: rgba(241, 241, 241, 0.6);
+          border-radius: 4px;
         }
 
         .qp-snake-body {
