@@ -11,6 +11,24 @@ function getStyles() {
           font-family: inherit;
         }
 
+        .qp-scoreboard {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          border-bottom: 1px solid #ddd;
+          margin: 0 2rem;
+          padding: 0.25rem 1rem;
+          font-family: monospace;
+        }
+        .qp-scoreboard-output {
+          /* text-align: center; */
+        }
+        .qp-scoreboard-counter {
+          text-align: right;
+        }
+        .qp-scoreboard-state {
+          text-align: left;
+        }
+
         .qp-snake-wrapper {
           display: flex;
           justify-content: center;

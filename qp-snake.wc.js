@@ -29,7 +29,7 @@ import getStyles from "./qp-snake.styles.js";
 
 class QPSnake extends HTMLElement {
   static SIZE = 20;
-  static LOOP_INTERVAL = 500;
+  static INTERVAL_SPEED = 500;
   static DIRECTIONS = ["up", "right", "down", "left"];
   static KEYS = {
     13: "Enter",
@@ -62,19 +62,28 @@ class QPSnake extends HTMLElement {
 
     // nodes
     this._board = null;
+    this._counter = null;
+    this._output = null;
+    this._stateNode = null;
     this._btnStop = null;
+    this._btnStart = null;
+    this._btnPause = null;
 
     // timers and properties
     this._hLoopTimer = null;
     this._snake = [];
     this._food = null;
+    this._speed = QPSnake.INTERVAL_SPEED;
+    this._level = 1;
     this._direction = "down";
+    this._state = "stopped";
     this._isRunning = false;
     this._isPaused = false;
 
     // Methods bound to this
     this._handleStopClick = this._handleStopClick.bind(this);
     this._handleStartClick = this._handleStartClick.bind(this);
+    this._handlePauseClick = this._handlePauseClick.bind(this);
     this._handleKeyDown = this._handleKeyDown.bind(this);
 
     // Initialize the dictionary function in the constructor,
@@ -170,7 +179,21 @@ class QPSnake extends HTMLElement {
   _defaultDict(key, lang = "de", args = []) {
     const fallback = {
       funSnakeStart: { de: "Start", en: "Start" },
+      funSnakePause: { de: "Pause", en: "Pause" },
       funSnakeStop: { de: "Stop", en: "Stop" },
+      scoreboardSize: {
+        de: `Spielfeld: ${args[0]}x${args[0]}`,
+        en: `Board: ${args[0]}x${args[0]}`,
+      },
+      scoreboardSnakeLength: { de: `Laenge: ${args[0]}`, en: `Length: ${args[0]}` },
+      scoreboardSnakeLength: { de: `Laenge: ${args[0]}`, en: `Length: ${args[0]}` },
+      scorboardSpeed: {
+        de: `Speed: ${args[0]}, Level: ${args[1]}`,
+        en: `Speed: ${args[0]}, Level: ${args[1]}`,
+      },
+      scoreboardState_paused: { de: `Pausiert`, en: `Paused` },
+      scoreboardState_running: { de: `Running`, en: `Running` },
+      scoreboardState_stopped: { de: `Stop`, en: `Stopped` },
     };
 
     return fallback[key]?.[lang] || key;
@@ -184,6 +207,16 @@ class QPSnake extends HTMLElement {
     this._board = this.shadowRoot.querySelector(".qp-snake-board");
     this._btnStop = this.shadowRoot.querySelector(".qp-snake-btn-stop");
     this._btnStart = this.shadowRoot.querySelector(".qp-snake-btn-start");
+    this._btnPause = this.shadowRoot.querySelector(".qp-snake-btn-pause");
+
+    this._counter = this.shadowRoot.querySelector(".qp-scoreboard-counter");
+      this._stateNode = this.shadowRoot.querySelector(".qp-scoreboard-state");
+    this._output = this.shadowRoot.querySelector(".qp-scoreboard-output");
+  }
+  
+  _setStates() {
+    if (this._stateNode) 
+      this._stateNode.innerHTML = this._dict(`scoreboardState_${this._state}`, this._lang);
   }
 
   _randomPosition() {
@@ -215,6 +248,7 @@ class QPSnake extends HTMLElement {
   _attachEvents() {
     this._btnStop && this._btnStop.addEventListener("click", this._handleStopClick);
     this._btnStart && this._btnStart.addEventListener("click", this._handleStartClick);
+    this._btnPause && this._btnPause.addEventListener("click", this._handlePauseClick);
 
     window.addEventListener("keydown", this._handleKeyDown);
   }
@@ -227,6 +261,7 @@ class QPSnake extends HTMLElement {
   _removeEvents() {
     this._btnStop && this._btnStop.removeEventListener("click", this._handleStopClick);
     this._btnStart && this._btnStart.removeEventListener("click", this._handleStartClick);
+    this._btnPause && this._btnPause.removeEventListener("click", this._handlePauseClick);
 
     window.removeEventListener("keydown", this._handleKeyDown);
   }
@@ -254,6 +289,14 @@ class QPSnake extends HTMLElement {
   }
   _handleStartClick() {
     this._startGame();
+  }
+
+  _handlePauseClick() {
+    if (this._isPaused) {
+      this._resumeGame();
+    } else {
+      this._pauseGame();
+    }
   }
 
   _handleKeyDown(e) {
@@ -291,7 +334,11 @@ class QPSnake extends HTMLElement {
   /* START - Game Controller */
   _lostGame() {
     this._clearLoop();
-    this._dispatchEvent("qp-snake.game-lost");
+    this._dispatchEvent("qp-snake.game-lost", {
+      level: this._level,
+      speed: this._speed,
+      length: this._snake.length,
+    });
   }
 
   _wonGame() {
@@ -299,23 +346,34 @@ class QPSnake extends HTMLElement {
     this._dispatchEvent("qp-snake.game-won");
   }
 
+  _restartLoop() {
+    this._hLoopTimer && clearInterval(this._hLoopTimer);
+    this._hLoopTimer = setInterval(() => this._renderLoop(), this._speed);
+  }
+
   _clearLoop() {
     this._hLoopTimer && clearInterval(this._hLoopTimer);
     this._hLoopTimer = null;
     this._isRunning = false;
     this._isPaused = false;
+    this._state = "stopped";
+    this._setStates();
   }
 
   _pauseGame() {
     this._hLoopTimer && clearInterval(this._hLoopTimer);
     this._hLoopTimer = null;
     this._isPaused = true;
+    this._state = "paused";
+    this._setStates();
     this._dispatchEvent("qp-snake.game-paused");
   }
 
   _resumeGame() {
-    this._hLoopTimer = setInterval(() => this._renderLoop(), QPSnake.LOOP_INTERVAL);
+    this._hLoopTimer = setInterval(() => this._renderLoop(), this._speed);
     this._isPaused = false;
+    this._state = "running";
+    this._setStates();
     this._dispatchEvent("qp-snake.game-resumed");
   }
 
@@ -330,16 +388,26 @@ class QPSnake extends HTMLElement {
     this._removeSnake();
     this._removeFood();
     this._initSnake();
+    this._speed = QPSnake.INTERVAL_SPEED;
+    this._level = 1;
   }
 
   _startGame() {
     this._resetGame();
     this._renderSnake();
     this._renderFood();
-    this._hLoopTimer = setInterval(() => this._renderLoop(), QPSnake.LOOP_INTERVAL);
+    this._hLoopTimer = setInterval(() => this._renderLoop(), this._speed);
 
     this._isRunning = true;
     this._isPaused = false;
+    this._state = "running";
+    this._setStates();
+    this._counter.textContent = this._dict(
+      "scorboardSpeed",
+      this._lang,
+      this._speed,
+      this._level,
+    );
     this._dispatchEvent("qp-snake.game-started");
   }
 
@@ -401,12 +469,18 @@ class QPSnake extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       ${this._setStyles()}
+      <div class="qp-scoreboard">
+        <div class="qp-scoreboard-state">---</div>
+        <div class="qp-scoreboard-title">${this._dict("scoreboardSize", this._lang, this._size)}</div>
+        <div class="qp-scoreboard-output">---</div>
+        <div class="qp-scoreboard-counter">${this._dict("scorboardSpeed", this._lang, this._speed, this._level)}</div>
+      </div>
       <div class="qp-snake-wrapper">
         <div class="qp-snake-board" style="--width: ${this._width}; --size: ${this._size};">${this._setCells()}</div>
       </div>
       <div class="qp-memory-button-bar">
         <button class="qp-btn qp-btn-primary qp-snake-btn-start">${this._dict("funSnakeStart", this._lang)}</button>
-        <button class="qp-btn qp-btn-cta qp-snake-btn-restart">${this._dict("funSnakeRestart", this._lang)}</button>
+        <button class="qp-btn qp-btn-cta qp-snake-btn-pause">${this._dict("funSnakePause", this._lang)}</button>
         <button class="qp-btn qp-btn-secondary qp-snake-btn-stop">${this._dict("funSnakeStop", this._lang)}</button>
       </div>
     `;
@@ -440,6 +514,25 @@ class QPSnake extends HTMLElement {
 
     const [x, y] = this._snake.at(-1);
     this._getCell([x, y]).classList.add("qp-snake-head");
+
+    this._output.textContent = this._dict("scoreboardSnakeLength", this._lang, this._snake.length);
+
+    if (this._snake.length % (this._level * 5) === 0 && this._speed >= 250) {
+      this._speed -= 25;
+      this._level += 1;
+      
+      this._dispatchEvent("qp-snake.game-level-up", {
+        level: this._level,
+        speed: this._speed
+      })
+      this._counter.textContent = this._dict(
+        "scorboardSpeed",
+        this._lang,
+        this._speed,
+        this._level,
+      );
+      this._restartLoop();
+    }
   }
 
   _renderFood() {
