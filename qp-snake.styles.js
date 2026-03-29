@@ -51,7 +51,7 @@ function getStyles() {
         }
           
         .qp-snake-cell {
-          background-color: rgba(241, 241, 241, 0.4);
+          background-color: rgba(241, 241, 241, 0.5);
           border-radius: 4px;
         }
 
