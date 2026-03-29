@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QP Snake — Web Component Demo</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    p {
+      font-size: 0.875rem;
+      color: #999;
+      margin-bottom: 1.5rem;
+    }
+
+    .demo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .log {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      width: min(90vw, 500px);
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .log p {
+      color: #7fba72;
+      margin: 0.15rem 0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>&lt;qp-snake&gt; Demo</h1>
+  <p>Space: Start / Pause &middot; Arrow Keys: Direction &middot; Escape: Stop</p>
+
+  <div class="demo">
+    <qp-snake size="15" width="70vmin" lang="en"></qp-snake>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <script type="module" src="../qp-snake.wc.js"></script>
+  <script>
+    const snake = document.querySelector("qp-snake");
+    const log = document.getElementById("log");
+
+    function addLog(msg) {
+      const p = document.createElement("p");
+      p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      log.prepend(p);
+    }
+
+    snake.addEventListener("qp-snake.game-started", () => addLog("Game started"));
+    snake.addEventListener("qp-snake.game-stopped", () => addLog("Game stopped"));
+    snake.addEventListener("qp-snake.game-paused", () => addLog("Game paused"));
+    snake.addEventListener("qp-snake.game-resumed", () => addLog("Game resumed"));
+    snake.addEventListener("qp-snake.game-level-up", (e) =>
+      addLog(`Level up! Level: ${e.detail.level}, Speed: ${e.detail.speed}ms`)
+    );
+    snake.addEventListener("qp-snake.game-lost", (e) =>
+      addLog(`Game lost — Level: ${e.detail.level}, Length: ${e.detail.length}`)
+    );
+    snake.addEventListener("qp-snake.game-won", () => addLog("Game won!"));
+  </script>
+
+</body>
+</html>
