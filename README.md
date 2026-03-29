@@ -9,6 +9,8 @@ game based on a [Live Coding Video](https://www.youtube.com/watch?v=4oNyD3A5Xl4)
 which I watched during a training session on my "Küchenrolle" (kitchen roll — a.k.a.
 indoor bike).
 
+**[Live Demo](https://quaese.github.io/QP-Snake-WebComponent/)**
+
 ## Usage
 
 ```html
