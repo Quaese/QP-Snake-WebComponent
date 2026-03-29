@@ -6,6 +6,9 @@ on:
     paths:
       - "*.js"
 
+permissions:
+  contents: write
+
 jobs:
   sync:
     runs-on: ubuntu-latest
