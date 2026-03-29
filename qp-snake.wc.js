@@ -1,16 +1,40 @@
 /**
  * <qp-snake> — Snake Game Web Component
  *
+ * A classic snake game. The snake moves across a grid, eats food to grow,
+ * and speeds up as the level increases. The game ends when the snake hits
+ * the wall or itself, or is won when the snake fills the entire board.
+ *
  * @element qp-snake
+ *
+ * @attr {number} size  - Grid size (NxN). Default: 20
+ * @attr {string} width - Board width as CSS value (e.g. "70vmin"). Default: "70vmin"
+ * @attr {string} lang  - Language code for translations ("de" or "en"). Default: "de"
  *
  * @example
  *   <qp-snake></qp-snake>
  *
+ *   <!-- Custom board size and language -->
+ *   <qp-snake size="15" width="80vmin" lang="en"></qp-snake>
+ *
  * @description
  *   Lifecycle:
- *     connectedCallback        — Renders the component and starts the game.
+ *     connectedCallback        — Renders the component.
  *     disconnectedCallback     — Clears timers and removes all event listeners.
  *     attributeChangedCallback — Re-renders when observed attributes change.
+ *
+ *   Game flow:
+ *     1. Player starts the game via Start button or Space key.
+ *     2. The snake moves in the current direction each tick (INTERVAL_SPEED ms).
+ *     3. Eating food grows the snake by one segment.
+ *     4. Every (level * 5) segments the speed increases and the level goes up.
+ *     5. Space pauses/resumes, Escape stops, Arrow keys change direction.
+ *     6. Game is lost on wall or self collision, won when the board is full.
+ *
+ *   UI sections:
+ *     - Scoreboard  — state indicator, board size, snake length, speed/level
+ *     - Board       — CSS grid of cells
+ *     - Button bar  — Start, Pause, Stop
  *
  *   Translations:
  *     All visible text is resolved via _dict() (Dictionary module) with a
@@ -18,6 +42,22 @@
  *
  *   Styles:
  *     Loaded from the external module qp-snake.styles.js via getStyles().
+ *
+ *   Events (CustomEvent, bubbles, composed):
+ *     - "qp-snake.game-started"  — fired when a new game starts.
+ *         detail: {}
+ *     - "qp-snake.game-stopped"  — fired when the game is stopped by the player.
+ *         detail: {}
+ *     - "qp-snake.game-paused"   — fired when the game is paused.
+ *         detail: {}
+ *     - "qp-snake.game-resumed"  — fired when the game is resumed after pause.
+ *         detail: {}
+ *     - "qp-snake.game-lost"     — fired when the snake hits a wall or itself.
+ *         detail: { level: number, speed: number, length: number }
+ *     - "qp-snake.game-won"      — fired when the snake fills the entire board.
+ *         detail: {}
+ *     - "qp-snake.game-level-up" — fired when speed increases and level goes up.
+ *         detail: { level: number, speed: number }
  *
  * @dependencies
  *   - ./qp-snake.dictionary.js  — i18n translations
@@ -41,6 +81,11 @@ class QPSnake extends HTMLElement {
     40: "ArrowDown",
   };
 
+  /**
+   * Creates an array of sequential integers from 0 to size - 1.
+   * @param {number} size - length of the array
+   * @returns {number[]}
+   */
   static range(size) {
     return Array.from({ length: size }, (_, i) => i);
   }
@@ -77,8 +122,6 @@ class QPSnake extends HTMLElement {
     this._level = 1;
     this._direction = "down";
     this._state = "stopped";
-    this._isRunning = false;
-    this._isPaused = false;
 
     // Methods bound to this
     this._handleStopClick = this._handleStopClick.bind(this);
@@ -123,7 +166,6 @@ class QPSnake extends HTMLElement {
         this._resetGame();
         break;
       case "width":
-        // this._width = newValue.endsWith('vmin') ? newValue : this._width;
         this._width = /^\d+vmin$/.test(newValue) ? newValue : this._width;
         break;
       case "lang":
@@ -136,9 +178,18 @@ class QPSnake extends HTMLElement {
       this._render();
     }
   }
+
+  /**
+   * Tears down the current state by removing all event listeners.
+   * Called before re-rendering and on disconnect.
+   * @private
+   */
+  _reset() {
+    this._removeEvents();
+  }
   /* END - Lifecycle */
 
-  /* START - Tools, Helpers */
+  /* START - Dictionary */
 
   /**
    * Initializes the dictionary function for translations.
@@ -186,8 +237,7 @@ class QPSnake extends HTMLElement {
         en: `Board: ${args[0]}x${args[0]}`,
       },
       scoreboardSnakeLength: { de: `Laenge: ${args[0]}`, en: `Length: ${args[0]}` },
-      scoreboardSnakeLength: { de: `Laenge: ${args[0]}`, en: `Length: ${args[0]}` },
-      scorboardSpeed: {
+      scoreboardSpeed: {
         de: `Speed: ${args[0]}, Level: ${args[1]}`,
         en: `Speed: ${args[0]}, Level: ${args[1]}`,
       },
@@ -198,46 +248,7 @@ class QPSnake extends HTMLElement {
 
     return fallback[key]?.[lang] || key;
   }
-
-  /**
-   * Caches references to shadow DOM nodes.
-   * @private
-   */
-  _setNodes() {
-    this._board = this.shadowRoot.querySelector(".qp-snake-board");
-    this._btnStop = this.shadowRoot.querySelector(".qp-snake-btn-stop");
-    this._btnStart = this.shadowRoot.querySelector(".qp-snake-btn-start");
-    this._btnPause = this.shadowRoot.querySelector(".qp-snake-btn-pause");
-
-    this._counter = this.shadowRoot.querySelector(".qp-scoreboard-counter");
-      this._stateNode = this.shadowRoot.querySelector(".qp-scoreboard-state");
-    this._output = this.shadowRoot.querySelector(".qp-scoreboard-output");
-  }
-  
-  _setStates() {
-    if (this._stateNode) 
-      this._stateNode.innerHTML = this._dict(`scoreboardState_${this._state}`, this._lang);
-  }
-
-  _randomPosition() {
-    return [Math.floor(Math.random() * this._size), Math.floor(Math.random() * this._size)];
-  }
-
-  _initSnake() {
-    const [x, y] = this._randomPosition();
-
-    // initialize snake (Array = Snake von hinten nach vorne, dh. [0] = letztes Element, [1] = Kopf)
-    this._snake = [
-      [x, y],
-      // [x + 1, y],
-      // [x + 2, y],
-      // [x + 3, y],
-      // [x + 4, y],
-    ];
-
-    this._direction = QPSnake.DIRECTIONS[Math.floor(Math.random() * QPSnake.DIRECTIONS.length)];
-  }
-  /* END - Tools, Helpers */
+  /* END - Dictionary */
 
   /* START - Event Controller */
 
@@ -283,22 +294,36 @@ class QPSnake extends HTMLElement {
   }
   /* END - Event Controller */
 
-  /* START - Event handlers */
+  /* START - Event Handlers */
+
+  /** @private */
   _handleStopClick() {
     this._stopGame();
   }
+
+  /** @private */
   _handleStartClick() {
     this._startGame();
   }
 
+  /**
+   * Toggles between paused and running state.
+   * @private
+   */
   _handlePauseClick() {
-    if (this._isPaused) {
+    if (this._state === "paused") {
       this._resumeGame();
     } else {
       this._pauseGame();
     }
   }
 
+  /**
+   * Handles keyboard input for direction changes and game control.
+   * Arrow keys change direction, Space starts/pauses/resumes, Escape stops.
+   * @private
+   * @param {KeyboardEvent} e
+   */
   _handleKeyDown(e) {
     QPSnake.KEYS[e.keyCode] && e.preventDefault();
 
@@ -316,9 +341,9 @@ class QPSnake extends HTMLElement {
         if (this._direction !== "up") this._direction = "down";
         break;
       case "Space":
-        if (!this._isRunning) {
+        if (this._state === "stopped") {
           this._startGame();
-        } else if (this._isPaused) {
+        } else if (this._state === "paused") {
           this._resumeGame();
         } else {
           this._pauseGame();
@@ -329,49 +354,82 @@ class QPSnake extends HTMLElement {
         break;
     }
   }
-  /* END - Event handlers */
+  /* END - Event Handlers */
 
   /* START - Game Controller */
-  _lostGame() {
-    this._clearLoop();
-    this._dispatchEvent("qp-snake.game-lost", {
-      level: this._level,
-      speed: this._speed,
-      length: this._snake.length,
-    });
+
+  /**
+   * Returns a random [x, y] position within the board.
+   * @private
+   * @returns {number[]} coordinate tuple [x, y]
+   */
+  _randomPosition() {
+    return [Math.floor(Math.random() * this._size), Math.floor(Math.random() * this._size)];
   }
 
-  _wonGame() {
-    this._clearLoop();
-    this._dispatchEvent("qp-snake.game-won");
+  /**
+   * Initializes the snake with a single segment at a random position
+   * and a random direction.
+   * @private
+   */
+  _initSnake() {
+    const [x, y] = this._randomPosition();
+
+    // initialize snake (Array = Snake von hinten nach vorne, dh. [0] = letztes Element, [1] = Kopf)
+    this._snake = [[x, y]];
+
+    this._direction = QPSnake.DIRECTIONS[Math.floor(Math.random() * QPSnake.DIRECTIONS.length)];
   }
 
-  _restartLoop() {
-    this._hLoopTimer && clearInterval(this._hLoopTimer);
+  /**
+   * Starts a new game. Resets state, renders snake and food,
+   * starts the loop, and dispatches "qp-snake.game-started".
+   * @private
+   */
+  _startGame() {
+    this._resetGame();
+    this._renderSnake();
+    this._renderFood();
     this._hLoopTimer = setInterval(() => this._renderLoop(), this._speed);
-  }
 
-  _clearLoop() {
-    this._hLoopTimer && clearInterval(this._hLoopTimer);
-    this._hLoopTimer = null;
-    this._isRunning = false;
-    this._isPaused = false;
-    this._state = "stopped";
+    this._state = "running";
     this._setStates();
+    this._counter.textContent = this._dict(
+      "scoreboardSpeed",
+      this._lang,
+      this._speed,
+      this._level,
+    );
+    this._dispatchEvent("qp-snake.game-started");
   }
 
+  /**
+   * Stops the current game and dispatches "qp-snake.game-stopped".
+   * @private
+   */
+  _stopGame() {
+    this._clearLoop();
+    this._dispatchEvent("qp-snake.game-stopped");
+  }
+
+  /**
+   * Pauses the running game. Stops the loop timer and dispatches "qp-snake.game-paused".
+   * @private
+   */
   _pauseGame() {
     this._hLoopTimer && clearInterval(this._hLoopTimer);
     this._hLoopTimer = null;
-    this._isPaused = true;
     this._state = "paused";
     this._setStates();
     this._dispatchEvent("qp-snake.game-paused");
   }
 
+  /**
+   * Resumes a paused game. Restarts the loop timer and dispatches "qp-snake.game-resumed".
+   * @private
+   */
   _resumeGame() {
     this._hLoopTimer = setInterval(() => this._renderLoop(), this._speed);
-    this._isPaused = false;
     this._state = "running";
     this._setStates();
     this._dispatchEvent("qp-snake.game-resumed");
@@ -392,186 +450,55 @@ class QPSnake extends HTMLElement {
     this._level = 1;
   }
 
-  _startGame() {
-    this._resetGame();
-    this._renderSnake();
-    this._renderFood();
-    this._hLoopTimer = setInterval(() => this._renderLoop(), this._speed);
-
-    this._isRunning = true;
-    this._isPaused = false;
-    this._state = "running";
-    this._setStates();
-    this._counter.textContent = this._dict(
-      "scorboardSpeed",
-      this._lang,
-      this._speed,
-      this._level,
-    );
-    this._dispatchEvent("qp-snake.game-started");
-  }
-
-  _stopGame() {
+  /**
+   * Ends the game as a loss. Stops the loop and dispatches "qp-snake.game-lost".
+   * @private
+   */
+  _lostGame() {
     this._clearLoop();
-    this._dispatchEvent("qp-snake.game-stopped");
+    this._dispatchEvent("qp-snake.game-lost", {
+      level: this._level,
+      speed: this._speed,
+      length: this._snake.length,
+    });
   }
 
   /**
-   * Tears down the current state by removing all event listeners.
-   * Called before re-rendering and on disconnect.
+   * Ends the game as a win. Stops the loop and dispatches "qp-snake.game-won".
    * @private
    */
-  _reset() {
-    this._removeEvents();
-  }
-  /* END - Game Controller */
-
-  /* START - UI Controller Methods */
-
-  /**
-   * Returns the scoped <style> block for the component.
-   * Delegates to the external getStyles() module.
-   * @private
-   * @returns {string} HTML string containing a <style> element
-   */
-  _setStyles() {
-    return getStyles.call(this);
-  }
-
-  _setCells() {
-    const cells = `${QPSnake.range(this._size)
-      .map(
-        (y) =>
-          `${QPSnake.range(this._size)
-            .map(
-              (x) => `
-            <div class="qp-snake-cell" data-id="${x + "," + y}" data-x="${x}" data-y="${y}"></div>
-          `,
-            )
-            .join("")}`,
-      )
-      .join("")}`;
-
-    return cells;
-  }
-
-  _getCell([x, y]) {
-    return this._board ? this._board.querySelector(`[data-id="${x},${y}"]`) : null;
+  _wonGame() {
+    this._clearLoop();
+    this._dispatchEvent("qp-snake.game-won");
   }
 
   /**
-   * Renders the full shadow DOM, caches node references, and attaches event listeners.
-   * Called on connect and when observed attributes change.
+   * Restarts the game loop with the current speed (e.g. after a level-up).
    * @private
    */
-  _render() {
-    this._reset();
-
-    this.shadowRoot.innerHTML = `
-      ${this._setStyles()}
-      <div class="qp-scoreboard">
-        <div class="qp-scoreboard-state">---</div>
-        <div class="qp-scoreboard-title">${this._dict("scoreboardSize", this._lang, this._size)}</div>
-        <div class="qp-scoreboard-output">---</div>
-        <div class="qp-scoreboard-counter">${this._dict("scorboardSpeed", this._lang, this._speed, this._level)}</div>
-      </div>
-      <div class="qp-snake-wrapper">
-        <div class="qp-snake-board" style="--width: ${this._width}; --size: ${this._size};">${this._setCells()}</div>
-      </div>
-      <div class="qp-memory-button-bar">
-        <button class="qp-btn qp-btn-primary qp-snake-btn-start">${this._dict("funSnakeStart", this._lang)}</button>
-        <button class="qp-btn qp-btn-cta qp-snake-btn-pause">${this._dict("funSnakePause", this._lang)}</button>
-        <button class="qp-btn qp-btn-secondary qp-snake-btn-stop">${this._dict("funSnakeStop", this._lang)}</button>
-      </div>
-    `;
-
-    if (this.isConnected) {
-      this._setNodes();
-      this._attachEvents();
-    }
+  _restartLoop() {
+    this._hLoopTimer && clearInterval(this._hLoopTimer);
+    this._hLoopTimer = setInterval(() => this._renderLoop(), this._speed);
   }
 
-  _renderLoop() {
-    this._removeSnake();
-    this._updateSnake();
-    this._renderSnake();
+  /**
+   * Stops the game loop timer and resets the state to "stopped".
+   * Used internally by _lostGame(), _wonGame(), and _stopGame().
+   * @private
+   */
+  _clearLoop() {
+    this._hLoopTimer && clearInterval(this._hLoopTimer);
+    this._hLoopTimer = null;
+    this._state = "stopped";
+    this._setStates();
   }
 
-  _removeSnake() {
-    for (const segment of this._snake) {
-      this._getCell(segment)?.classList.remove("qp-snake-body", "qp-snake-head");
-    }
-  }
-
-  _renderSnake() {
-    // this._board.querySelectorAll(".qp-snake-cell").forEach((cell) => {
-    //   cell.classList.remove("qp-snake-body", "qp-snake-head");
-    // });
-
-    for (const [x, y] of this._snake) {
-      this._getCell([x, y]).classList.add("qp-snake-body");
-    }
-
-    const [x, y] = this._snake.at(-1);
-    this._getCell([x, y]).classList.add("qp-snake-head");
-
-    this._output.textContent = this._dict("scoreboardSnakeLength", this._lang, this._snake.length);
-
-    if (this._snake.length % (this._level * 5) === 0 && this._speed >= 250) {
-      this._speed -= 25;
-      this._level += 1;
-      
-      this._dispatchEvent("qp-snake.game-level-up", {
-        level: this._level,
-        speed: this._speed
-      })
-      this._counter.textContent = this._dict(
-        "scorboardSpeed",
-        this._lang,
-        this._speed,
-        this._level,
-      );
-      this._restartLoop();
-    }
-  }
-
-  _renderFood() {
-    if (this._snake.length >= this._size * this._size) {
-      this._wonGame();
-      return;
-    }
-
-    this._food && this._removeFood();
-
-    this._food = this._randomPosition();
-
-    while (this._hasCollision(this._food)) {
-      this._food = this._randomPosition();
-    }
-
-    this._getCell(this._food).classList.add("qp-snake-food");
-  }
-
-  _removeFood() {
-    this._food && this._getCell(this._food).classList.remove("qp-snake-food");
-
-    this._food = null;
-  }
-
-  _isHeadValid(head) {
-    const [x, y] = head;
-
-    return x >= 0 && x < this._size && y >= 0 && y < this._size;
-  }
-
-  _hasCollision(position) {
-    return this._snake.some((segment) => segment[0] === position[0] && segment[1] === position[1]);
-  }
-
-  _hasEqualPosition(position1, position2) {
-    return position1[0] === position2[0] && position1[1] === position2[1];
-  }
-
+  /**
+   * Calculates the next head position based on the current direction.
+   * Checks for collisions and boundary violations (triggers _lostGame()),
+   * handles food consumption (grows snake) or normal movement.
+   * @private
+   */
   _updateSnake() {
     // coordinates of head
     const [x, y] = this._snake.at(-1);
@@ -618,7 +545,276 @@ class QPSnake extends HTMLElement {
       return;
     }
   }
-  /* END - UI Controller Methods */
+
+  /**
+   * Checks whether the snake has reached a level-up threshold.
+   * If so, increases speed and level, updates the scoreboard,
+   * dispatches "qp-snake.game-level-up", and restarts the loop.
+   * @private
+   */
+  _checkLevelUp() {
+    if (this._snake.length % (this._level * 5) === 0 && this._speed >= 250) {
+      this._speed -= 25;
+      this._level += 1;
+
+      this._dispatchEvent("qp-snake.game-level-up", {
+        level: this._level,
+        speed: this._speed,
+      });
+      this._counter.textContent = this._dict(
+        "scoreboardSpeed",
+        this._lang,
+        this._speed,
+        this._level,
+      );
+      this._restartLoop();
+    }
+  }
+  /* END - Game Controller */
+
+  /* START - Game Logic (Helpers) */
+
+  /**
+   * Checks whether a position is within the board boundaries.
+   * @private
+   * @param {number[]} head - coordinate tuple [x, y]
+   * @returns {boolean}
+   */
+  _isHeadValid(head) {
+    const [x, y] = head;
+
+    return x >= 0 && x < this._size && y >= 0 && y < this._size;
+  }
+
+  /**
+   * Checks whether a position overlaps with any segment of the snake.
+   * @private
+   * @param {number[]} position - coordinate tuple [x, y]
+   * @returns {boolean}
+   */
+  _hasCollision(position) {
+    return this._snake.some((segment) => segment[0] === position[0] && segment[1] === position[1]);
+  }
+
+  /**
+   * Compares two coordinate tuples for equality.
+   * @private
+   * @param {number[]} position1 - first coordinate [x, y]
+   * @param {number[]} position2 - second coordinate [x, y]
+   * @returns {boolean}
+   */
+  _hasEqualPosition(position1, position2) {
+    return position1[0] === position2[0] && position1[1] === position2[1];
+  }
+  /* END - Game Logic (Helpers) */
+
+  /* START - UI / Rendering */
+
+  /**
+   * Returns the scoped <style> block for the component.
+   * Delegates to the external getStyles() module.
+   * @private
+   * @returns {string} HTML string containing a <style> element
+   */
+  _setStyles() {
+    return getStyles.call(this);
+  }
+
+  /**
+   * Generates the HTML string for all board cells as a flat grid.
+   * @private
+   * @returns {string} HTML string of cell div elements
+   */
+  _setCells() {
+    const cells = `${QPSnake.range(this._size)
+      .map(
+        (y) =>
+          `${QPSnake.range(this._size)
+            .map(
+              (x) => `
+            <div class="qp-snake-cell" data-id="${x + "," + y}" data-x="${x}" data-y="${y}"></div>
+          `,
+            )
+            .join("")}`,
+      )
+      .join("")}`;
+
+    return cells;
+  }
+
+  /**
+   * Returns the DOM element for a given board coordinate.
+   * @private
+   * @param {number[]} position - coordinate tuple [x, y]
+   * @returns {HTMLElement|null}
+   */
+  _getCell([x, y]) {
+    return this._board ? this._board.querySelector(`[data-id="${x},${y}"]`) : null;
+  }
+
+  /**
+   * Caches references to shadow DOM nodes.
+   * @private
+   */
+  _setNodes() {
+    this._board = this.shadowRoot.querySelector(".qp-snake-board");
+    this._btnStop = this.shadowRoot.querySelector(".qp-snake-btn-stop");
+    this._btnStart = this.shadowRoot.querySelector(".qp-snake-btn-start");
+    this._btnPause = this.shadowRoot.querySelector(".qp-snake-btn-pause");
+
+    this._counter = this.shadowRoot.querySelector(".qp-scoreboard-counter");
+    this._stateNode = this.shadowRoot.querySelector(".qp-scoreboard-state");
+    this._output = this.shadowRoot.querySelector(".qp-scoreboard-output");
+  }
+
+  /**
+   * Updates the scoreboard state indicator to reflect the current game state.
+   * @private
+   */
+  _setStates() {
+    if (this._stateNode)
+      this._stateNode.innerHTML = this._dict(`scoreboardState_${this._state}`, this._lang);
+  }
+
+  /**
+   * Renders the full shadow DOM, caches node references, and attaches event listeners.
+   * Called on connect and when observed attributes change.
+   * @private
+   */
+  _render() {
+    this._reset();
+
+    this.shadowRoot.innerHTML = `
+      ${this._setStyles()}
+      ${this._createScoreboard()}
+      ${this._createBoard()}
+      ${this._createButtonBar()}
+    `;
+
+    if (this.isConnected) {
+      this._setNodes();
+      this._attachEvents();
+    }
+  }
+
+  /**
+   * Creates the scoreboard HTML with state, title, output, and counter.
+   * @private
+   * @returns {string} HTML string
+   */
+  _createScoreboard() {
+    return `
+      <div class="qp-scoreboard">
+        <div class="qp-scoreboard-state">---</div>
+        <div class="qp-scoreboard-title">${this._dict("scoreboardSize", this._lang, this._size)}</div>
+        <div class="qp-scoreboard-output">---</div>
+        <div class="qp-scoreboard-counter">${this._dict("scoreboardSpeed", this._lang, this._speed, this._level)}</div>
+      </div>`;
+  }
+
+  /**
+   * Creates the game board HTML with the CSS grid of cells.
+   * @private
+   * @returns {string} HTML string
+   */
+  _createBoard() {
+    return `
+      <div class="qp-snake-wrapper">
+        <div class="qp-snake-board" style="--width: ${this._width}; --size: ${this._size};">${this._setCells()}</div>
+      </div>`;
+  }
+
+  /**
+   * Creates the button bar HTML with Start, Pause, and Stop buttons.
+   * @private
+   * @returns {string} HTML string
+   */
+  _createButtonBar() {
+    return `
+      <div class="qp-memory-button-bar">
+        <button class="qp-btn qp-btn-primary qp-snake-btn-start">${this._dict("funSnakeStart", this._lang)}</button>
+        <button class="qp-btn qp-btn-cta qp-snake-btn-pause">${this._dict("funSnakePause", this._lang)}</button>
+        <button class="qp-btn qp-btn-secondary qp-snake-btn-stop">${this._dict("funSnakeStop", this._lang)}</button>
+      </div>`;
+  }
+
+  /**
+   * Single game tick: removes old snake, updates position,
+   * re-renders snake, updates scoreboard, and checks for level-up.
+   * @private
+   */
+  _renderLoop() {
+    this._removeSnake();
+    this._updateSnake();
+    this._renderSnake();
+    this._updateScoreboard();
+    this._checkLevelUp();
+  }
+
+  /**
+   * Removes all snake CSS classes from the board cells.
+   * @private
+   */
+  _removeSnake() {
+    for (const segment of this._snake) {
+      this._getCell(segment)?.classList.remove("qp-snake-body", "qp-snake-head");
+    }
+  }
+
+  /**
+   * Renders the snake on the board by adding CSS classes to the corresponding cells.
+   * The last segment receives the additional "qp-snake-head" class.
+   * @private
+   */
+  _renderSnake() {
+    for (const [x, y] of this._snake) {
+      this._getCell([x, y]).classList.add("qp-snake-body");
+    }
+
+    const [x, y] = this._snake.at(-1);
+    this._getCell([x, y]).classList.add("qp-snake-head");
+  }
+
+  /**
+   * Places food at a random position that does not collide with the snake.
+   * Triggers _wonGame() if the snake fills the entire board.
+   * @private
+   */
+  _renderFood() {
+    if (this._snake.length >= this._size * this._size) {
+      this._wonGame();
+      return;
+    }
+
+    this._food && this._removeFood();
+
+    this._food = this._randomPosition();
+
+    while (this._hasCollision(this._food)) {
+      this._food = this._randomPosition();
+    }
+
+    this._getCell(this._food).classList.add("qp-snake-food");
+  }
+
+  /**
+   * Removes the current food element from the board.
+   * @private
+   */
+  _removeFood() {
+    this._food && this._getCell(this._food).classList.remove("qp-snake-food");
+
+    this._food = null;
+  }
+
+  /**
+   * Updates the scoreboard output with the current snake length.
+   * @private
+   */
+  _updateScoreboard() {
+    this._output.textContent = this._dict("scoreboardSnakeLength", this._lang, this._snake.length);
+  }
+  /* END - UI / Rendering */
 }
 
 // Registration
