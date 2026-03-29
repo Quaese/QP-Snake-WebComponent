@@ -1,0 +1,22 @@
+name: Sync docs
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "*.js"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy JS files to docs/
+        run: cp qp-snake.wc.js qp-snake.dictionary.js qp-snake.styles.js docs/
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet docs/ || (git add docs/ && git commit -m "chore: sync JS files to docs/" && git push)
